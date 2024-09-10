@@ -2,12 +2,16 @@
 % Please edit documentation in R/ic_app.R
 \name{ic_app}
 \alias{ic_app}
-\title{ic_app}
+\title{ic_app.}
 \usage{
-ic_app()
+ic_app(...)
+}
+\arguments{
+\item{...}{Options passed to golem::with_golem_options.}
 }
 \value{
-A shiny app object.
+A shiny app object. This will effectively launch a browser and start
+the app on local port 7462.
 }
 \description{
 \code{ic_app} will start a shiny app that allows to upload raw
@@ -15,11 +19,7 @@ data, process selectively and analyze different methods of ratio calculation
 between two intensity traces.
 }
 \details{
-The app is described in detail in
-<\href{https://jali.shinyapps.io/IsoCor}{this publication}>.
-}
-\references{
-\url{https://jali.shinyapps.io/IsoCor}
+The app is described in detail in \doi{10.1039/D2JA00208F}.
 }
 \seealso{
 \link{iso_ratio}

@@ -1,7 +1,6 @@
 #' @title ic_specplot
 #' @description Generate an annotated plot of one to several spectra
 #'     to visualize the processing results of ic_app().
-#'
 #' @param opt Vector of keywords to hide/show specific elements of the plot.
 #' @param xrng Numeric vector of length 2 specifying plotting range for x. 
 #' @param mi_spec Main isotope spectra (list of MALDIquant objects).
@@ -9,23 +8,37 @@
 #' @param x_unit Unit of x axis.
 #' @param ylab2 Character vector to be used for secondary axis labelling.
 #' @param s_focus Index of sample within focus.
-#' @param pks List of peaks.
+#' @param pks Data frame of peaks with columns 'Sample', 'Peak ID', 'Scan start' and 'Scan end'.
 #' @param mi_pks Peaks of main isotope.
 #' @param cdf Settings of current drift filter.
 #' @param sel_pk Selected peak as numeric index of length one.
-#'
+#' @importFrom graphics abline axTicks axis box legend lines mtext par points segments
+#' @importFrom grDevices grey
 #' @return An annotated plot of one to several spectra.
 #' @examples 
-#' 
-#'
+#' if (interactive()) {
+#'   utils::data("testdata", package = "IsoCor")
+#'   mi_spec <- lapply(testdata, function(x) {
+#'     MALDIquant::createMassSpectrum(mass = x[,"Time"]/60, intensity = x[,"32S"]) 
+#'   })
+#'   si_spec <- lapply(testdata, function(x) {
+#'     MALDIquant::createMassSpectrum(mass = x[,"Time"]/60, intensity = x[,"34S"]) 
+#'   })
+#'   IsoCor:::ic_specplot(mi_spec=mi_spec)
+#'   IsoCor:::ic_specplot(
+#'     opt = c("overlay_mi", "overlay_legend", "overlay_si", "overlay_drift", "correct_drift"), 
+#'     mi_spec=mi_spec, si_spec=si_spec
+#'   )
+#' }
 #' @keywords internal
 #' @noRd
 ic_specplot <- function(
   opt = "", 
-  xrng = c(0, 10),
+  xrng = c(0, 12),
   mi_spec = NULL,
   si_spec = NULL,
   xlab = paste0("Time [", "min", "]"),
+  ylab = "Intensity [V]",
   ylab2 = paste0("32S", "/", "34S"),
   s_focus = "Sample 1",
   pks = NULL,
@@ -38,7 +51,7 @@ ic_specplot <- function(
   # modify plot margins
   par(mar = c(4.5, 4.5, 0.5, ifelse("overlay_drift" %in% opt, 4.5, 0.5)))
   # render base plot
-  plot(x = xrng, y = yrng, type = "n", xaxs = "i", xlab = xlab, ylab = "Intensity [V]")
+  plot(x = xrng, y = yrng, type = "n", xaxs = "i", xlab = xlab, ylab = ylab)
   if ("overlay_mi" %in% opt) {
     idx_all <- 1:length(mi_spec)
     cols <- 2:(length(idx_all)+1)
@@ -55,14 +68,14 @@ ic_specplot <- function(
     si <- intensity(mi_spec[[idx]])
     flt <- sm>=xrng[1] & sm<=xrng[2]
     lines(x = sm[flt], y = si[flt], col=cols[idx])
-    if ("overlay_si" %in% opt) {
+    if ("overlay_si" %in% opt && inherits(si_spec[[idx]], "MassSpectrum")) {
       lines(
         x = mass(si_spec[[idx]])[flt],
         y = intensity(si_spec[[idx]])[flt],
         col = cols[idx]
       )
     }
-    if (!is.null(mi_pks) && length(mi_pks[[idx]]@mass)>=1) {
+    if (!is.null(mi_pks) && length(mi_pks[[idx]]@mass)>=1 && !is.null(si_spec)) {
       if (idx==idx_all[1]) {
         peak_details <- lapply(idx_all, function (idx) {
           tmp <- pks[pks[,"Sample"]==idx,,drop=FALSE]
@@ -109,14 +122,52 @@ ic_specplot <- function(
           mtext(text = paste0(ylab2, ifelse(at_test," [%]","")), side = 4, adj=0.5, line=3)
         }
       }
-      if ("overlay_pb" %in% opt) {
-        pks_sam <- pks[pks[,"Sample"]==idx,]
-        for (j in 1:nrow(pks_sam)) { 
-          pb <- c(pks_sam[j,"Scan start"], pks_sam[j,"Scan end"])
-          abline(v=sm[pb], col=cols[idx])
-          mtext(text = j, side = 1, at = sm[pb[1]], adj = 0, line = -1.1, col=cols[idx])
-        }
+    }
+    if ("overlay_pb" %in% opt) {
+      pks_sam <- pks[pks[,"Sample"]==idx,]
+      for (j in 1:nrow(pks_sam)) { 
+        pb <- c(pks_sam[j,"Scan start"], pks_sam[j,"Scan end"])
+        abline(v=sm[pb], col=cols[idx])
+        mtext(text = j, side = 1, at = sm[pb[1]], adj = 0, line = -1.1, col=cols[idx])
       }
     }
   }
+}
+
+#' @title ic_deltaplot
+#' @description tbd.
+#' @param df data.frame containing delta values.
+#' @return An annotated plot of delta values.
+#' @keywords internal
+#' @examples 
+#' if (interactive()) {
+#'   df <- data.frame(
+#'    "Ratio method" = gl(n = 3, k = 4, labels = c("PBP","PAI","LRS")),
+#'    "Zone [%]" = rep(c(50,80,95,100), 3),
+#'    "Mean Delta" = rnorm(12),
+#'    "SD Delta" = rnorm(12),
+#'    check.names = FALSE
+#'   )
+#'   IsoCor:::ic_deltaplot(df = df)
+#' })
+#' @noRd
+ic_deltaplot <- function(df) {
+  df <- df[is.finite(df[,grep("Mean Delta", colnames(df))]),]
+  df[,"Ratio method"] <- factor(df[,"Ratio method"], levels=c("PBP","PAI","LRS"))
+  cols <- c(5:7)[as.numeric(df[,"Ratio method"])]
+  pchs <- c(21,22,24)[as.numeric(df[,"Ratio method"])]
+  x <- factor(df[,"Zone [%]"])
+  x_ann <- levels(x)
+  x <- as.numeric(x) + c(-0.05,0,0.05)[as.numeric(df[,"Ratio method"])]
+  y <- df[,grep("Mean Delta", colnames(df))]
+  e <- df[,grep("SD Delta", colnames(df))]
+  validate(need(all(c(any(is.finite(x)), any(is.finite(y)), any(is.finite(e)))), "No finite plotting data available."))
+  par(mar = c(4.5, 4.5, 1.5, 0.5))
+  plot(x=range(x)+c(-1,1)*0.1*diff(range(x)), y=range(rep(y,2)+rep(c(-1,1),each=length(y))*2*e), type="n", xlab="Zone [%] (values are slightly shifted to improve visibility)", ylab="Mean Delta", axes=F)
+  axis(2); axis(1, at=1:length(x_ann), labels = x_ann); box()
+  legend(x = "top", horiz=TRUE, pch=c(21,22,24), pt.bg=c(5:7), legend=levels(df[,"Ratio method"]))
+  segments(x0 = x, y0 = y-2*e, y1 = y+2*e, col = cols)
+  segments(x0 = x, y0 = y-2*e, y1 = y+2*e, col = cols)
+  points(x = x, y = y, pch = pchs, bg = cols, cex=2)
+  invisible(NULL)
 }
